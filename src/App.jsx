@@ -3,38 +3,43 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { apiService } from './services/api';
 import './App.css';
 
-function App() {
-  // Backend status state
+import { AppProvider, useApp } from './context/AppContext';
+import Navbar from './components/Navbar';
+import Toast from './components/Toast';
+
+import LandingPage from './pages/LandingPage';
+import CollectorDashboard from './pages/CollectorDashboard';
+import AiResultPage from './pages/AiResultPage';
+import HouseholdHistory from './pages/HouseholdHistory';
+import GreenPointsStreak from './pages/GreenPointsStreak';
+import AdminDashboard from './pages/AdminDashboard';
+
+// Direct Inspector Portal Component (Preserves single-page workflow)
+function DirectInspectorPortal() {
   const [backendHealth, setBackendHealth] = useState({ online: false, checking: true, details: null });
 
-  // Household lookup & management state
   const [householdIdInput, setHouseholdIdInput] = useState('');
   const [household, setHousehold] = useState(null);
   const [householdLoading, setHouseholdLoading] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [regForm, setRegForm] = useState({ name: '', address: '', green_points: 0, streak: 0 });
 
-  // Camera QR Scanner state
   const [isScanningQR, setIsScanningQR] = useState(false);
   const [qrScannerError, setQrScannerError] = useState(null);
   const qrScannerRef = useRef(null);
 
-  // Inspection History state
   const [inspectionHistory, setInspectionHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
 
-  // Waste inspection state
   const [wasteStream, setWasteStream] = useState('wet');
   const [selectedFile, setSelectedFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [inspecting, setInspecting] = useState(false);
   const [inspectionResult, setInspectionResult] = useState(null);
 
-  // Global Alert State (Success / Error)
   const [alert, setAlert] = useState(null);
 
-  // Check backend health on mount
   useEffect(() => {
     checkHealth();
   }, []);
@@ -56,7 +61,6 @@ function App() {
     }, 6000);
   };
 
-  // Fetch Inspection History for active household
   const loadInspectionHistory = async (householdId) => {
     if (!householdId) return;
     setHistoryLoading(true);
@@ -72,7 +76,6 @@ function App() {
     }
   };
 
-  // 1. QR / Household Lookup
   const handleLookup = async (idToSearch) => {
     const searchId = idToSearch || householdIdInput.trim();
     if (!searchId) {
@@ -97,7 +100,6 @@ function App() {
     }
   };
 
-  // Camera QR Code Scanner lifecycle management
   useEffect(() => {
     let html5QrcodeScanner = null;
     if (isScanningQR) {
@@ -125,9 +127,7 @@ function App() {
                   });
               }
             },
-            () => {
-              // Ignore standard frame scanning failures
-            }
+            () => {}
           ).catch((err) => {
             setQrScannerError(`Camera Access Failed: ${err.message || 'Please check camera permissions.'}`);
           });
@@ -146,7 +146,6 @@ function App() {
     }
   }, [isScanningQR]);
 
-  // 2. Household Registration
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     if (!regForm.name || !regForm.address) {
@@ -170,7 +169,6 @@ function App() {
     }
   };
 
-  // 3. File Selection & Image Preview
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -184,7 +182,6 @@ function App() {
     }
   };
 
-  // Quick Select Presets for Household
   const handleQuickSelectHousehold = async (preset) => {
     setHouseholdLoading(true);
     try {
@@ -213,7 +210,6 @@ function App() {
     }
   };
 
-  // Quick Select Sample Image Preset
   const handleSelectSampleImage = (type) => {
     let svgContent = '';
     let filename = '';
@@ -256,19 +252,63 @@ function App() {
     showAlert('success', `Loaded Demo Sample Photo: ${filename}`);
   };
 
+  const handleInspectionSubmit = async (e) => {
+    e.preventDefault();
+
+    const targetHouseholdId = householdIdInput.trim();
+    if (!targetHouseholdId) {
+      showAlert('error', 'Please enter or select a Household ID before submitting.');
+      return;
+    }
+
+    if (!selectedFile) {
+      showAlert('error', 'Please upload or select a waste inspection photo.');
+      return;
+    }
+
+    setInspecting(true);
+    setAlert(null);
+    setInspectionResult(null);
+
+    try {
+      const result = await apiService.submitInspection({
+        householdId: targetHouseholdId,
+        declaredStream: wasteStream,
+        imageFile: selectedFile,
+      });
+
+      setInspectionResult(result);
+      showAlert(
+        'success',
+        `Inspection #${result.inspection_id} completed! Compliance: ${result.compliance_score}% | Points: +${result.green_points_awarded}`
+      );
+
+      try {
+        const updatedHousehold = await apiService.getHousehold(targetHouseholdId);
+        setHousehold(updatedHousehold);
+      } catch {
+        // Ignore if household refresh fails
+      }
+
+      loadInspectionHistory(targetHouseholdId);
+    } catch (err) {
+      showAlert('error', err.message || 'Inspection submission failed.');
+    } finally {
+      setInspecting(false);
+    }
+  };
+
   return (
-    <div className="app-container">
-      {/* Platform Header */}
+    <div className="app-container" style={{ maxWidth: '1000px', margin: '0 auto' }}>
       <header className="app-header">
         <div className="header-brand">
           <span className="brand-logo">🌱</span>
           <div>
-            <h1>EcoClean Platform</h1>
+            <h1>EcoClean Portal</h1>
             <p className="subtitle">Smart Waste Management & Segregation Portal</p>
           </div>
         </div>
 
-        {/* Backend Health Connection Badge */}
         <div className={`health-badge ${backendHealth.online ? 'online' : 'offline'}`}>
           <span className="dot"></span>
           <span>
@@ -286,7 +326,6 @@ function App() {
         </div>
       </header>
 
-      {/* Global Alert Notification Banner */}
       {alert && (
         <div className={`alert-banner alert-${alert.type}`}>
           <span className="alert-icon">{alert.type === 'success' ? '✅' : '⚠️'}</span>
@@ -298,7 +337,6 @@ function App() {
       )}
 
       <main className="main-content">
-        {/* SECTION 1: Household QR Lookup & Profile */}
         <section className="card-section">
           <div className="card-header">
             <h2>🔍 Household Lookup & QR Scanner</h2>
@@ -339,7 +377,6 @@ function App() {
             </button>
           </div>
 
-          {/* Quick Select Preset Chips */}
           <div className="preset-bar">
             <span className="preset-label">Quick Select Demo Household:</span>
             <button
@@ -386,7 +423,6 @@ function App() {
             </button>
           </div>
 
-          {/* Camera QR Scanner Modal Overlay */}
           {isScanningQR && (
             <div className="qr-modal-overlay">
               <div className="qr-modal-card">
@@ -410,7 +446,6 @@ function App() {
             </div>
           )}
 
-          {/* Quick Registration Collapsible Form */}
           {showRegisterModal && (
             <form className="register-form" onSubmit={handleRegisterSubmit}>
               <h3>Register New Household</h3>
@@ -460,7 +495,6 @@ function App() {
             </form>
           )}
 
-          {/* Loaded Household Details & Inspection History Card */}
           {household && (
             <div className="household-profile-card">
               <div className="profile-main">
@@ -483,7 +517,6 @@ function App() {
                 </div>
               </div>
 
-              {/* TASK 3: Inspection History Component */}
               <div className="history-container">
                 <h4 className="history-title">📜 Inspection History</h4>
 
@@ -531,7 +564,6 @@ function App() {
           )}
         </section>
 
-        {/* SECTION 2: Waste Inspection Upload */}
         <section className="card-section">
           <div className="card-header">
             <h2>📸 AI Waste Inspection</h2>
@@ -540,7 +572,6 @@ function App() {
 
           <form className="inspection-form" onSubmit={handleInspectionSubmit}>
             <div className="form-row">
-              {/* Target Household ID Input */}
               <div className="form-field flex-1">
                 <label>Target Household ID *</label>
                 <input
@@ -552,7 +583,6 @@ function App() {
                 />
               </div>
 
-              {/* Waste Stream Selector */}
               <div className="form-field flex-1">
                 <label>Declared Waste Stream *</label>
                 <div className="stream-selector">
@@ -574,7 +604,6 @@ function App() {
               </div>
             </div>
 
-            {/* Quick Sample Image Preset Chips */}
             <div className="preset-bar">
               <span className="preset-label">Demo Sample Photos:</span>
               <button
@@ -600,7 +629,6 @@ function App() {
               </button>
             </div>
 
-            {/* Image Upload Input & Preview */}
             <div className="form-field">
               <label>Waste Inspection Photo *</label>
               <div className="upload-dropzone">
@@ -628,7 +656,6 @@ function App() {
               </div>
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               className="btn btn-primary btn-large"
@@ -638,7 +665,6 @@ function App() {
             </button>
           </form>
 
-          {/* AI Inspection Result Display with Confidence & Review Badges */}
           {inspectionResult && (
             <div className={`result-card ${inspectionResult.is_segregated ? 'result-clean' : 'result-contaminated'}`}>
               <div className="result-header">
@@ -662,7 +688,6 @@ function App() {
               </div>
 
               <div className="result-body">
-                {/* Confidence & Category Meta Metrics */}
                 <div className="meta-grid">
                   <div className="meta-item">
                     <span className="meta-label">🎯 AI Confidence Score</span>
@@ -680,7 +705,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* Compliance Score Bar */}
                 <div className="score-section">
                   <div className="score-header">
                     <span>Compliance Score</span>
@@ -697,7 +721,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* Detected Items Tags */}
                 <div className="items-section">
                   <span className="section-label">AI Detected Items:</span>
                   <div className="item-tags">
@@ -713,12 +736,89 @@ function App() {
           )}
         </section>
       </main>
+    </div>
+  );
+}
 
-      <footer className="app-footer">
-        <p>EcoClean Waste Management Platform &copy; 2026 | Person 2 - Backend & Integration</p>
+// Main Layout Router Component
+function MainLayout() {
+  const { activeTab } = useApp();
+
+  const renderActivePage = () => {
+    switch (activeTab) {
+      case 'landing':
+        return <LandingPage />;
+      case 'collector':
+        return <CollectorDashboard />;
+      case 'ai-result':
+        return <AiResultPage />;
+      case 'history':
+        return <HouseholdHistory />;
+      case 'points':
+        return <GreenPointsStreak />;
+      case 'admin':
+        return <AdminDashboard />;
+      case 'portal':
+        return <DirectInspectorPortal />;
+      default:
+        return <LandingPage />;
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Navbar />
+
+      <main className="main-content">
+        {renderActivePage()}
+      </main>
+
+      <Toast />
+
+      <footer
+        style={{
+          background: 'rgba(5, 8, 15, 0.95)',
+          borderTop: '1px solid var(--border-subtle)',
+          padding: '24px 20px',
+          marginTop: 'auto'
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '1280px',
+            margin: '0 auto',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '16px',
+            fontSize: '0.8rem',
+            color: 'var(--text-muted)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontWeight: 700, color: '#fff' }}>SortRight AI</span>
+            <span>•</span>
+            <span>Waste Segregation at Source (Reward-First Compliance Framework)</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34d399', boxShadow: '0 0 6px #34d399' }} />
+              Edge AI Telemetry: Online
+            </span>
+            <span>Backend & Frontend Integrated</span>
+          </div>
+        </div>
       </footer>
     </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AppProvider>
+      <MainLayout />
+    </AppProvider>
+  );
+}
