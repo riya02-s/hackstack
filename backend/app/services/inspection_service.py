@@ -47,7 +47,14 @@ class InspectionService:
                 detail="Declared waste stream must be either 'wet' or 'dry'.",
             )
 
-        # 3. Analyze Image with Mock AI Engine
+        # 3. Read and Validate Image Binary Payload
+        image_bytes = await image_file.read()
+        if not image_bytes or len(image_bytes) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded image file is empty or corrupted.",
+            )
+
         filename = image_file.filename or "waste_image.jpg"
         (
             detected_items,
@@ -55,7 +62,11 @@ class InspectionService:
             contamination_status,
             compliance_score,
             green_points_awarded,
-        ) = self.ai_service.analyze_image(clean_stream, filename)
+            confidence_score,
+            waste_category,
+            needs_review,
+            prediction_source,
+        ) = self.ai_service.analyze_image(clean_stream, filename, image_bytes)
 
         # 4. Construct Inspection Entity
         inspection_id = f"insp_{uuid.uuid4().hex[:10]}"
@@ -69,16 +80,22 @@ class InspectionService:
             contamination_status=contamination_status,
             compliance_score=compliance_score,
             green_points_awarded=green_points_awarded,
+            confidence_score=confidence_score,
+            waste_category=waste_category,
+            needs_review=needs_review,
+            prediction_source=prediction_source,
         )
 
         # 5. Persist Inspection History Record
         saved_inspection = await self.inspection_repo.save(inspection)
 
-        # 6. Update Household Rewards (Green Points & Streak) if Segregated
+        # 6. Update Household Rewards (Green Points & Streak)
         if is_segregated:
             household.green_points += green_points_awarded
             household.streak += 1
-            await self.household_repo.save(household)
+        else:
+            household.streak = 0  # Reset streak on non-segregated waste detection
+        await self.household_repo.save(household)
 
         return InspectionResponse.model_validate(saved_inspection)
 

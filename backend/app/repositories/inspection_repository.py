@@ -1,27 +1,6 @@
-"""Inspection Repository interface and in-memory implementation."""
-
-from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 from app.models.inspection import Inspection
-
-
-class BaseInspectionRepository(ABC):
-    """Interface defining persistence operations for Inspection records."""
-
-    @abstractmethod
-    async def save(self, inspection: Inspection) -> Inspection:
-        """Save a new inspection record."""
-        pass
-
-    @abstractmethod
-    async def get_by_id(self, inspection_id: str) -> Optional[Inspection]:
-        """Retrieve inspection record by unique ID."""
-        pass
-
-    @abstractmethod
-    async def list_by_household(self, household_id: str) -> List[Inspection]:
-        """Retrieve all inspections for a specific household."""
-        pass
+from app.repositories.base import BaseInspectionRepository
 
 
 class InMemoryInspectionRepository(BaseInspectionRepository):
@@ -45,4 +24,8 @@ class InMemoryInspectionRepository(BaseInspectionRepository):
         ]
 
 
-inspection_repository = InMemoryInspectionRepository()
+from app.repositories.sqlite_repository import SQLiteInspectionRepository
+
+# Persistent SQLite repository instance for Inspections
+inspection_repository = SQLiteInspectionRepository()
+

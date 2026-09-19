@@ -25,5 +25,8 @@ class InMemoryHouseholdRepository(BaseHouseholdRepository):
         return list(self._store.values())
 
 
-# Singleton instance of the repository for shared in-memory state
-household_repository = InMemoryHouseholdRepository()
+from app.repositories.sqlite_repository import SQLiteHouseholdRepository
+
+# Persistent SQLite repository instance for Households
+household_repository = SQLiteHouseholdRepository()
+

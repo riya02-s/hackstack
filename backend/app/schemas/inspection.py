@@ -26,6 +26,19 @@ class InspectionResponse(BaseModel):
     green_points_awarded: int = Field(
         ..., ge=0, description="Green points earned for this inspection"
     )
+    confidence_score: float = Field(
+        default=0.90, ge=0.0, le=1.0, description="Confidence score scale 0.0 to 1.0"
+    )
+    waste_category: str = Field(
+        default="wet", description="Categorized stream: 'wet', 'dry', 'recyclable', 'hazardous'"
+    )
+    needs_review: bool = Field(
+        default=False, description="Flagged True if confidence < 0.65 or ambiguous"
+    )
+    prediction_source: str = Field(
+        default="image_content_analyzer_v1", description="Classification source engine"
+    )
     timestamp: str = Field(..., description="UTC ISO timestamp of inspection")
 
     model_config = ConfigDict(from_attributes=True)
+
